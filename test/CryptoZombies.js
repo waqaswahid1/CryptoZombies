@@ -1,9 +1,13 @@
 const ZombieFactory = artifacts.require("ZombieFactory");
 const ZombieAttack = artifacts.require("ZombieAttack");
+const ZombieOwnership = artifacts.require("ZombieOwnership");
+
 const utils = require("./helpers/utils");
-const time = require("./helpers/time");
 const zombieNames = ["Zombie 1", "Zombie 2"];
 const expect = require('chai').expect;
+const latestTime = require("./helpers/latestTime")
+const { increaseTimeTo, duration } = require("./helpers/increaseTime");
+
 
 
 contract("CryptoZombies", (accounts) => {
@@ -12,61 +16,56 @@ contract("CryptoZombies", (accounts) => {
     beforeEach(async () => {
         zombieFactory = await ZombieFactory.new();
         zombieAttack = await ZombieAttack.new();
+        zombieOwnership = await ZombieOwnership.new();
     });
     it("should be able to create a new zombie", async () => {
-        const result = await zombieFactory.createRandomZombie(zombieNames[0], {from: account1});
+        const result = await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
 
         expect(result.receipt.status).to.equal(true);
         expect(result.logs[0].args.name).to.equal(zombieNames[0]);
     })
     it("should not allow two zombies", async () => {
-        // start here
-        await zombieFactory.createRandomZombie(zombieNames[0], {from: account1});
-        await utils.shouldThrow(zombieFactory.createRandomZombie(zombieNames[1], {from: account1}));
+        await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
+        await utils.shouldThrow(zombieOwnership.createRandomZombie(zombieNames[1], {from: account1}));
     })
 
     context("with the single-step transfer scenario", async () => {
         it("should transfer a zombie", async () => {
-          // start here.
-          const result = await zombieFactory.createRandomZombie(zombieNames[0], {from: account1});
+          const result = await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
           const zombieId = result.logs[0].args.zombieId.toNumber();
-          await zombieFactory.transferFrom(account1, account2, zombieId, {from: account1});
-          const newOwner = await zombieFactory.ownerOf(zombieId);
+          await zombieOwnership.transferFrom(account1, account2, zombieId, {from: account1});
+          const newOwner = await zombieOwnership.ownerOf(zombieId);
           assert.equal(newOwner, account2);
         })
     })
     context("with the two-step transfer scenario", async () => {
         it("should approve and then transfer a zombie when the approved address calls transferFrom", async () => {
-          // TODO: Test the two-step scenario.  The approved address calls transferFrom
-          const result = await zombieFactory.createRandomZombie(zombieNames[0], {from: account1});
+          const result = await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
           const zombieId = result.logs[0].args.zombieId.toNumber();
-          // start here
-          await zombieFactory.approve(account2, zombieId, {from: account1});
-          await zombieFactory.transferFrom(account1, account2, zombieId, {from: account2});
-          const newOwner = await zombieFactory.ownerOf(zombieId);
-          expect(newOwner).to.equal(bob);
+          await zombieOwnership.approve(account2, zombieId, {from: account1});
+          await zombieOwnership.transferFrom(account1, account2, zombieId, {from: account2});
+          const newOwner = await zombieOwnership.ownerOf(zombieId);
+          expect(newOwner).to.equal(account2);
         })
         it("should approve and then transfer a zombie when the owner calls transferFrom", async () => {
-            // TODO: Test the two-step scenario.  The owner calls transferFrom
             
-        const result = await zombieFactory.createRandomZombie(zombieNames[0], {from: account1});
+        const result = await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
         const zombieId = result.logs[0].args.zombieId.toNumber();
-          // start here
-        await zombieFactory.approve(account2, zombieId, {from: account1});
-        await zombieFactory.transferFrom(account1, account2, zombieId, {from: account1});
-        const newOwner = await zombieFactory.ownerOf(zombieId);
-        expect(newOwner).to.equal(bob);
+        await zombieOwnership.approve(account2, zombieId, {from: account1});
+        await zombieOwnership.transferFrom(account1, account2, zombieId, {from: account1});
+        const newOwner = await zombieOwnership.ownerOf(zombieId);
+        expect(newOwner).to.equal(account2);
     })
 
         it("zombies should be able to attack another zombie", async () => {
             let result;
-            result = await zombieFactory.createRandomZombie(zombieNames[0], {from: alice});
+            result = await zombieOwnership.createRandomZombie(zombieNames[0], {from: account1});
             const firstZombieId = result.logs[0].args.zombieId.toNumber();
-            result = await zombieFactory.createRandomZombie(zombieNames[1], {from: bob});
+            result = await zombieOwnership.createRandomZombie(zombieNames[1], {from: account2});
             const secondZombieId = result.logs[0].args.zombieId.toNumber();
-            //TODO: increase the time
-            await time.increase(time.duration.days(1));
-            await zombieAttack.attack(firstZombieId, secondZombieId, {from: alice});
+            const currentTime = await latestTime().timestamp;
+            await increaseTimeTo(currentTime + duration.days(1));
+            await zombieOwnership.attack(firstZombieId, secondZombieId, {from: account1});
             expect(result.receipt.status).to.equal(true);
         })
     })
